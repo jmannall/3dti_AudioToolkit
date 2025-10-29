@@ -147,7 +147,7 @@ namespace Common {
 		// METHODS 	
 
 		// brief This method copies the input vector into an array and insert the imaginary part.
-		static void ProcessAddImaginaryPart(const std::vector<float>& input, std::vector<double>& output);
+		static void ProcessAddImaginaryPart(const std::vector<float>& input, double *output, size_t outputSize);
 		
 		//This method copy the FFT-1 output array into the storage vector, remove the imaginary part and normalize the output.	
 		void ProcessOutputBuffer_IFFT_OverlapAddMethod(std::vector<double>& input, std::vector<float>& outBuffer);

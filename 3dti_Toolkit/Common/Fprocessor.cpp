@@ -69,24 +69,51 @@ namespace Common {
 			///////////////////////////////////////////////////////////////////////////////
 			int ip_size = std::sqrt(FFTBufferSize / 2) + 2;		//Size of the auxiliary array w. This come from lib documentation/examples.
 			int w_size = FFTBufferSize * 5 / 4;					//Size of the auxiliary array w. This come from lib documentation/examples.
-			std::vector<int> ip(ip_size);						//Define the auxiliary array ip 
-			std::vector<double> w(w_size);						//Define the auxiliary array w			
+
+			int* ip;
+			double* w;
+			double* inputAudioBuffer_frequency;
+
+			// The maximum size to try and allocate directly on the stack
+			constexpr size_t MaximumStackSize = 2048;
+			const bool useStackAlloc = FFTBufferSize <= MaximumStackSize;
+			if (useStackAlloc)
+			{
+				// allocate the ip/w arrays directly on the stack (if std::vector is used here, memory allocation shows up in the profiler)
+				ip = static_cast<int*>(alloca(ip_size * sizeof(int)));
+				w = static_cast<double*>(alloca(w_size * sizeof(double)));
+				inputAudioBuffer_frequency = static_cast<double*>(alloca(FFTBufferSize * sizeof(double)));
+			}
+			else 
+			{
+				// size is too big, so use new to allocate it
+				ip = new int[ip_size];
+				w = new double[w_size];
+				inputAudioBuffer_frequency = new double[FFTBufferSize];
+			}
 			ip[0] = 0;											//w[],ip[] are initialized if ip[0] == 0.
 
 			//////////////
 			// Make FFT //
-			//////////////			
-			std::vector<double> inputAudioBuffer_frequency(FFTBufferSize, 0.0f);			//Initialize the vector of doubles to store the FFT					
-			ProcessAddImaginaryPart(inputAudioBuffer_time, inputAudioBuffer_frequency);			//Copy the input vector into an vector of doubles and insert the imaginary part.											
-			cdft(FFTBufferSize, 1, inputAudioBuffer_frequency.data(), ip.data(), w.data());	//Make the FFT
+			//////////////
+			ProcessAddImaginaryPart(inputAudioBuffer_time, inputAudioBuffer_frequency, FFTBufferSize);			//Copy the input vector into an vector of doubles and insert the imaginary part.											
+			cdft(FFTBufferSize, 1, inputAudioBuffer_frequency, ip, w);	//Make the FFT
 			
 			////////////////////
 			// Prepare Output //
 			////////////////////	
 			//Copy to the output float vector			
 			if (outputAudioBuffer_frequency.size() != FFTBufferSize) { outputAudioBuffer_frequency.resize(FFTBufferSize); }
-			for (int i = 0; i < inputAudioBuffer_frequency.size(); i++) {
+			for (int i = 0; i < FFTBufferSize; i++) {
 				outputAudioBuffer_frequency[i] = static_cast<float>(inputAudioBuffer_frequency[i]);
+			}
+
+			// if we did not use a stack allocation, free it
+			if (!useStackAlloc)
+			{
+				delete[] ip;
+				delete[] w;
+				delete[] inputAudioBuffer_frequency;
 			}
 		}		
 	}
@@ -116,22 +143,24 @@ namespace Common {
 			///////////////////////////////////////////////////////////////////////////////
 			int ip_size = std::sqrt(FFTBufferSize / 2) + 2;		//Size of the auxiliary array w. This come from lib documentation/examples.
 			int w_size = FFTBufferSize * 5 / 4;					//Size of the auxiliary array w. This come from lib documentation/examples.
-			std::vector<int> ip(ip_size);						//Define the auxiliary array ip 
-			std::vector<double> w(w_size);						//Define the auxiliary array w			
+
+			// allocate the ip/w arrays directly on the stack
+			int* ip = (int*)alloca(ip_size * sizeof(int));
+			double* w = (double*)alloca(w_size * sizeof(double));
 			ip[0] = 0;											//w[],ip[] are initialized if ip[0] == 0.
 
 			//////////////
 			// Make FFT //
-			//////////////	
-			std::vector<double> inputAudioBuffer_frequency(FFTBufferSize, 0.0f);			//Initialize the vector of doubles to store the FFT					
-			ProcessAddImaginaryPart(inputAudioBuffer_time, inputAudioBuffer_frequency);			//Copy the input vector into an vector of doubles and insert the imaginary part.
-			cdft(FFTBufferSize, 1, inputAudioBuffer_frequency.data(), ip.data(), w.data());	//Make the FFT
+			//////////////
+			double *inputAudioBuffer_frequency = (double*)alloca(FFTBufferSize*sizeof(double));				//This is just a temporary buffer, so use alloca() to allocate it directly from the stack
+			ProcessAddImaginaryPart(inputAudioBuffer_time, inputAudioBuffer_frequency, FFTBufferSize);		//Copy the input vector into an vector of doubles and insert the imaginary part.
+			cdft(FFTBufferSize, 1, inputAudioBuffer_frequency, ip, w);										//Make the FFT
 
 			////////////////////
 			// Prepare Output //
 			////////////////////			
 			outputAudioBuffer_frequency.resize(FFTBufferSize);
-			for (int i = 0; i < inputAudioBuffer_frequency.size(); i++) {
+			for (int i = 0; i < FFTBufferSize; i++) {
 				outputAudioBuffer_frequency[i] = static_cast<float>(inputAudioBuffer_frequency[i]);
 			}
 		}
@@ -338,14 +367,16 @@ namespace Common {
 	/////////////////////
 
 	//This method copies the input vector into an array and insert the imaginary part.
-	void CFprocessor::ProcessAddImaginaryPart(const std::vector<float>& input, std::vector<double>& output)
+	void CFprocessor::ProcessAddImaginaryPart(const std::vector<float>& input, double *output, size_t outputSize)
 	{
-		ASSERT(output.size() >= 2 * input.size(), RESULT_ERROR_BADSIZE, "Output buffer size must be at least twice the input buffer size when adding imaginary part in frequency convolver", "");
+		ASSERT(outputSize >= 2 * input.size(), RESULT_ERROR_BADSIZE, "Output buffer size must be at least twice the input buffer size when adding imaginary part in frequency convolver", "");
 
 		for (int i = 0; i < input.size(); i++)
 		{
 			output[2 * i] = static_cast<double> (input[i]);
-			//output[2 * i + 1] = 0;
+
+			// we no longer zero the array, so make sure this is set
+			output[2 * i + 1] = 0;
 		}
 	}//ProcessAddImaginaryPart
 	
