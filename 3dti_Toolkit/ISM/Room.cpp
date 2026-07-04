@@ -61,7 +61,7 @@ namespace ISM
 		shoeBox = true;
 	}
 
-	void Room::setupRoomGeometry(RoomGeometry roomGeometry)
+	void Room::setupRoomGeometry(const RoomGeometry& roomGeometry)
 	{
 		walls.clear();
 		for (int i = 0; i < roomGeometry.walls.size(); i++)
@@ -76,7 +76,8 @@ namespace ISM
 		shoeBox = false;
 	}
 		
-	void Room::insertWall(Wall _newWall)
+	///void Room::insertWall(std::shared_ptr<Wall> _newWall)
+	void Room::insertWall(const Wall& _newWall)
 	{
 		walls.push_back(_newWall);
 	}
@@ -107,14 +108,45 @@ namespace ISM
 		walls.at(wallIndex).setAbsortion(absortionPerBand);
 	}
 
-	std::vector<Wall> Room::getWalls()
+	void Room::setWallAbsortion(std::vector<std::vector<float>> absortionPerBandPerWall)
+	{
+		// Check the number of bands and the number of walls
+		if (absortionPerBandPerWall.size() != getWalls().size())
+		{
+			SET_RESULT(RESULT_ERROR_BADSIZE, "Size of vector of absortion profiles per wall and numbar of walls are different");
+			return;
+		}
+
+		for (int i = 0; i < getWalls().size(); i++)
+		{
+			setWallAbsortion(i, absortionPerBandPerWall.at(i));
+		}		
+	}
+
+	std::vector<std::vector<float>> Room::GetWallAbsortion() {
+		std::vector<std::vector<float>> absortions;
+		for (int i = 0; i < getWalls().size(); i++)
+		{
+			absortions.push_back(getWalls().at(i).getAbsortionB());
+		}
+		return absortions;
+	}
+
+	/*std::vector<Wall> Room::getWalls()
+	{
+		return walls;
+	}*/
+	
+	const std::vector<Wall> & Room::getWalls() const
 	{
 		return walls;
 	}
-
-	std::vector<Room> Room::getImageRooms()
+	
+	//std::vector<Room>& Room::getImageRooms() const
+	void  Room::getImageRooms(std::vector<Room>& roomList) const
 	{
-		std::vector<Room> roomList;
+		//std::vector<Room> roomList;
+		roomList.clear();
 		for (int i = 0; i < walls.size(); i++)
 		{
 			if (walls.at(i).isActive())
@@ -128,15 +160,14 @@ namespace ISM
 				roomList.push_back(tempRoom);
 			}
 		}
-		return roomList;
+		//return roomList;
 	}
 
-	bool Room::checkPointInsideRoom(Common::CVector3 point, float &distanceNearestWall)
+	bool Room::checkPointInsideRoom(const Common::CVector3& point, float &distanceNearestWall) const
 	{
 		float distanceToPlane = FLT_MAX;
-		bool inside;
-
-		inside = true;
+		bool inside = true;
+		
 		for (int i = 0; i < walls.size(); i++)
 		{
 			if (walls.at(i).isActive())
@@ -189,7 +220,7 @@ namespace ISM
 		return inside;
 	}
 
-	Common::CVector3 Room::getCenter()
+	Common::CVector3 Room::getCenter() const
 	{
 		Common::CVector3 center = Common::CVector3::ZERO;
 
@@ -203,5 +234,10 @@ namespace ISM
 
 		return center;
 	}
+
+	//Common::CVector3 Room::getCenter() const {		
+	//	
+	//	return const_cast<Room*>(this)->getCenter();		
+	//}
 
 } //namespace ISM
